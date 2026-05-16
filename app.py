@@ -1,22 +1,22 @@
 from flask import Flask, render_template, request, jsonify
 from langdetect import detect
 from deep_translator import GoogleTranslator
-import requests
+from huggingface_hub import InferenceClient
 import os
 
 app = Flask(__name__)
 
 # ── Hugging Face config ────────────────────────────────────────────────────────
 HF_TOKEN = os.getenv("HF_TOKEN")
-API_URL = (
-    "https://api-inference.huggingface.co/models/"
-    "j-hartmann/emotion-english-distilroberta-base"
-)
+
+# New router URL (old api-inference.huggingface.co is deprecated/404)
+# huggingface_hub InferenceClient handles auth + correct endpoint automatically
+MODEL_ID = "j-hartmann/emotion-english-distilroberta-base"
 
 # ── Lookup tables ──────────────────────────────────────────────────────────────
 LANGUAGE_NAMES = {
     "en": "English", "hi": "Hindi", "fr": "French", "es": "Spanish",
-    "de": "German", "it": "Italian", "ja": "Japanese", "ko": "Korean",
+    "de": "German",  "it": "Italian", "ja": "Japanese", "ko": "Korean",
     "zh-cn": "Chinese", "ar": "Arabic", "ru": "Russian",
 }
 EMOTION_EMOJIS = {
@@ -24,9 +24,13 @@ EMOTION_EMOJIS = {
     "surprise": "😲", "disgust": "🤢", "neutral": "😐",
 }
 EMOTION_COLORS = {
-    "joy": "text-green-400", "sadness": "text-blue-400", "anger": "text-red-400",
-    "fear": "text-yellow-400", "surprise": "text-purple-400",
-    "disgust": "text-pink-400", "neutral": "text-indigo-300",
+    "joy":      "text-green-400",
+    "sadness":  "text-blue-400",
+    "anger":    "text-red-400",
+    "fear":     "text-yellow-400",
+    "surprise": "text-purple-400",
+    "disgust":  "text-pink-400",
+    "neutral":  "text-indigo-300",
 }
 
 
@@ -38,33 +42,37 @@ def health():
 
 # ── Emotion detection ──────────────────────────────────────────────────────────
 def detect_emotion(text: str) -> dict:
+    """
+    Use huggingface_hub InferenceClient (provider='hf-inference') which calls:
+        https://router.huggingface.co/hf-inference/models/<model>
+    This replaces the deprecated api-inference.huggingface.co endpoint.
+
+    Returns {"label": "joy", "score": 0.97} or {"error": "..."}
+    """
     if not HF_TOKEN:
         return {"error": "HF_TOKEN environment variable is not set."}
 
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
     try:
-        response = requests.post(
-            API_URL, headers=headers, json={"inputs": text}, timeout=20,
+        client = InferenceClient(
+            provider="hf-inference",
+            api_key=HF_TOKEN,
         )
-        response.raise_for_status()
-        result = response.json()
-    except requests.exceptions.Timeout:
-        return {"error": "The AI model is loading — please retry in a few seconds."}
-    except requests.exceptions.RequestException as e:
-        return {"error": f"API request failed: {e}"}
-    except ValueError:
-        return {"error": "Invalid JSON returned by the API."}
+        # text_classification returns a list of ClassificationOutput objects
+        results = client.text_classification(text, model=MODEL_ID)
 
-    if isinstance(result, dict) and "error" in result:
-        return {"error": result["error"]}
-    if not result:
-        return {"error": "Empty response from the API."}
+        if not results:
+            return {"error": "Empty response from the API."}
 
-    try:
-        candidates = result[0] if isinstance(result[0], list) else result
-        return max(candidates, key=lambda x: x["score"])
-    except (KeyError, IndexError, TypeError) as e:
-        return {"error": f"Unexpected API response format: {e}"}
+        # Pick highest-scoring label
+        best = max(results, key=lambda x: x.score)
+        return {"label": best.label, "score": best.score}
+
+    except Exception as e:
+        err = str(e)
+        # Friendly message for model cold-start (common on free HF tier)
+        if "loading" in err.lower() or "503" in err:
+            return {"error": "Model is warming up — please retry in a few seconds."}
+        return {"error": f"Inference failed: {err}"}
 
 
 # ── Main route ─────────────────────────────────────────────────────────────────
@@ -80,20 +88,27 @@ def home():
             return render_template("index.html", result=result)
 
         try:
+            # 1. Detect language
             lang_code = detect(text)
             language = LANGUAGE_NAMES.get(lang_code, f"Unknown ({lang_code})")
 
-            translated_text = (
-                text if lang_code == "en"
-                else GoogleTranslator(source="auto", target="en").translate(text)
-            )
+            # 2. Translate to English (skip if already English)
+            if lang_code == "en":
+                translated_text = text
+            else:
+                translated_text = GoogleTranslator(
+                    source="auto", target="en"
+                ).translate(text)
 
+            # 3. Detect emotion
             prediction = detect_emotion(translated_text)
 
+            # 4. Surface any errors
             if "error" in prediction:
                 result = {"error": prediction["error"]}
                 return render_template("index.html", result=result)
 
+            # 5. Build result dict
             emotion = prediction["label"].lower()
             result = {
                 "language":      language,
@@ -104,6 +119,7 @@ def home():
                 "emotion_class": EMOTION_COLORS.get(emotion, "text-indigo-300"),
                 "error":         None,
             }
+
         except Exception as e:
             result = {"error": str(e)}
 
