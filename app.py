@@ -16,8 +16,7 @@ print("Loading AI Emotion Model...")
 # Load Hugging Face emotion model
 classifier = pipeline(
     "text-classification",
-    model="j-hartmann/emotion-english-distilroberta-base",
-    top_k=1
+    model="bhadresh-savani/distilbert-base-uncased-emotion"
 )
 
 
@@ -98,10 +97,10 @@ def home():
             # Emotion Detection
             prediction = classifier(translated_text)
 
-            emotion = prediction[0][0]['label']
+            emotion = prediction[0]['label']
 
             confidence = round(
-                prediction[0][0]['score'] * 100,
+                prediction[0]['score'] * 100,
                 2
             )
 
