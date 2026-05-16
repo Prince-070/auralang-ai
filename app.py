@@ -7,168 +7,211 @@ import os
 
 from deep_translator import GoogleTranslator
 
-
-app = Flask(__name__)
-
+app = Flask(**name**)
 
 print("Loading AI Emotion Model...")
 
+# Hugging Face API Token
 
-# Load Hugging Face emotion model
 HF_TOKEN = os.getenv("HF_TOKEN")
 
+# Hugging Face Emotion Model API
+
 API_URL = (
-    "https://api-inference.huggingface.co/models/"
-    "j-hartmann/emotion-english-distilroberta-base"
+"https://api-inference.huggingface.co/models/"
+"j-hartmann/emotion-english-distilroberta-base"
 )
 
 headers = {
-    "Authorization": f"Bearer {HF_TOKEN}"
+"Authorization": f"Bearer {HF_TOKEN}"
 }
 
-
 print("AI Model Loaded Successfully!")
+
+# Emotion Detection Function
+
 def detect_emotion(text):
 
-    payload = {
-        "inputs": text
-    }
 
-    response = requests.post(
-        API_URL,
-        headers=headers,
-        json=payload
-    )
+payload = {
+    "inputs": text
+}
+
+response = requests.post(
+    API_URL,
+    headers=headers,
+    json=payload
+)
+
+try:
 
     result = response.json()
 
     return result
 
-# Language mapping
+except Exception:
+
+    return {
+        "error": "Unable to process emotion detection."
+    }
+
+
+# Language Mapping
+
 language_names = {
 
-    "en": "English",
-    "hi": "Hindi",
-    "fr": "French",
-    "es": "Spanish",
-    "de": "German",
-    "it": "Italian",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "zh-cn": "Chinese",
-    "ar": "Arabic",
-    "ru": "Russian"
+
+"en": "English",
+"hi": "Hindi",
+"fr": "French",
+"es": "Spanish",
+"de": "German",
+"it": "Italian",
+"ja": "Japanese",
+"ko": "Korean",
+"zh-cn": "Chinese",
+"ar": "Arabic",
+"ru": "Russian"
+
 
 }
 
+# Emotion Emojis
 
-# Emotion emojis
 emotion_emojis = {
 
-    "joy": "😊",
-    "sadness": "😢",
-    "anger": "😡",
-    "fear": "😨",
-    "surprise": "😲",
-    "disgust": "🤢",
-    "neutral": "😐"
+
+"joy": "😊",
+"sadness": "😢",
+"anger": "😡",
+"fear": "😨",
+"surprise": "😲",
+"disgust": "🤢",
+"neutral": "😐"
+
 
 }
 
+# Emotion Colors
 
-# Emotion color classes
 emotion_colors = {
 
-    "joy": "text-green-400",
-    "sadness": "text-blue-400",
-    "anger": "text-red-400",
-    "fear": "text-yellow-400",
-    "surprise": "text-purple-400",
-    "disgust": "text-pink-400",
-    "neutral": "text-indigo-300"
+
+"joy": "text-green-400",
+"sadness": "text-blue-400",
+"anger": "text-red-400",
+"fear": "text-yellow-400",
+"surprise": "text-purple-400",
+"disgust": "text-pink-400",
+"neutral": "text-indigo-300"
+
 
 }
-
-
 @app.route("/", methods=["GET", "POST"])
 def home():
 
-    result = None
 
-    if request.method == "POST":
+result = None
 
-        text = request.form["text"]
+if request.method == "POST":
 
-        try:
+    text = request.form["text"]
 
-            # Detect Language
-            lang_code = detect(text)
+    try:
 
-            language = language_names.get(
-                lang_code,
-                "Unknown"
-            )
+        # Detect Language
+        lang_code = detect(text)
 
-            # Translate text to English
-            translated_text = GoogleTranslator(
-                source='auto',
-                target='en'
-            ).translate(text)
-
-            # Emotion Detection
-            prediction = detect_emotion(
-                translated_text
-            )
-
-            emotion = prediction[0]["label"]
-
-            confidence = round(
-                prediction[0]["score"] * 100,
-                2
+        language = language_names.get(
+            lang_code,
+            "Unknown"
         )
 
-            # Emotion emoji
-            emoji = emotion_emojis.get(
-                emotion.lower(),
-                "🧠"
-            )
+        # Translate To English
+        translated_text = GoogleTranslator(
+            source='auto',
+            target='en'
+        ).translate(text)
 
-            # Emotion color
-            emotion_class = emotion_colors.get(
-                emotion.lower(),
-                "text-indigo-300"
-            )
+        # Emotion Detection
+        prediction = detect_emotion(
+            translated_text
+        )
 
-            # Final result dictionary
-            result = {
+        print(prediction)
 
-                "language": language,
+        # Handle API Errors
+        if isinstance(prediction, dict):
 
-                "translated": translated_text,
+            if "error" in prediction:
 
-                "emotion": emotion.capitalize(),
+                result = {
+                    "error": prediction["error"]
+                }
 
-                "confidence": confidence,
+                return render_template(
+                    "index.html",
+                    result=result
+                )
 
-                "emoji": emoji,
+        # Extract Emotion
+        emotion = prediction[0]["label"]
 
-                "emotion_class": emotion_class
+        confidence = round(
+            prediction[0]["score"] * 100,
+            2
+        )
 
-            }
+        # Emotion Emoji
+        emoji = emotion_emojis.get(
+            emotion.lower(),
+            "🧠"
+        )
 
-        except Exception as e:
+        # Emotion Color
+        emotion_class = emotion_colors.get(
+            emotion.lower(),
+            "text-indigo-300"
+        )
 
-            result = {
+        # Final Result
+        result = {
 
-                "error": str(e)
+            "language": language,
 
-            }
+            "translated": translated_text,
 
-    return render_template(
-        "index.html",
-        result=result
-    )
+            "emotion": emotion.capitalize(),
+
+            "confidence": confidence,
+
+            "emoji": emoji,
+
+            "emotion_class": emotion_class,
+
+            "error": None
+
+        }
+
+    except Exception as e:
+
+        result = {
+
+            "error": str(e)
+
+        }
+
+return render_template(
+    "index.html",
+    result=result
+)
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+if **name** == "**main**":
+
+
+app.run(
+    host="0.0.0.0",
+    port=5000
+)
+
