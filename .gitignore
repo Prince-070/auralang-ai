@@ -1,0 +1,42 @@
+# Virtual Environment
+
+venv/
+
+# Python Cache
+
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment Variables
+
+.env
+
+# VS Code
+
+.vscode/
+
+# Jupyter Notebook Checkpoints
+
+.ipynb_checkpoints/
+
+# macOS
+
+.DS_Store
+
+# Logs
+
+*.log
+
+# Temporary Files
+
+*.tmp
+
+# Render / Deployment
+
+instance/
+
+# Hugging Face Cache (optional)
+
+.cache/
