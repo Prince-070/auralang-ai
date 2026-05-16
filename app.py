@@ -120,12 +120,12 @@ def home():
                 translated_text
             )
 
-            emotion = prediction[0][0]["label"]
+            emotion = prediction[0]["label"]
 
             confidence = round(
-                prediction[0][0]["score"] * 100,
+                prediction[0]["score"] * 100,
                 2
-            )
+        )
 
             # Emotion emoji
             emoji = emotion_emojis.get(
