@@ -2,7 +2,8 @@ from flask import Flask, render_template, request
 
 from langdetect import detect
 
-from transformers import pipeline
+import requests
+import os
 
 from deep_translator import GoogleTranslator
 
@@ -14,14 +15,34 @@ print("Loading AI Emotion Model...")
 
 
 # Load Hugging Face emotion model
-classifier = pipeline(
-    "text-classification",
-    model="bhadresh-savani/distilbert-base-uncased-emotion"
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+API_URL = (
+    "https://api-inference.huggingface.co/models/"
+    "j-hartmann/emotion-english-distilroberta-base"
 )
+
+headers = {
+    "Authorization": f"Bearer {HF_TOKEN}"
+}
 
 
 print("AI Model Loaded Successfully!")
+def detect_emotion(text):
 
+    payload = {
+        "inputs": text
+    }
+
+    response = requests.post(
+        API_URL,
+        headers=headers,
+        json=payload
+    )
+
+    result = response.json()
+
+    return result
 
 # Language mapping
 language_names = {
@@ -95,12 +116,14 @@ def home():
             ).translate(text)
 
             # Emotion Detection
-            prediction = classifier(translated_text)
+            prediction = detect_emotion(
+                translated_text
+            )
 
-            emotion = prediction[0]['label']
+            emotion = prediction[0][0]["label"]
 
             confidence = round(
-                prediction[0]['score'] * 100,
+                prediction[0][0]["score"] * 100,
                 2
             )
 
